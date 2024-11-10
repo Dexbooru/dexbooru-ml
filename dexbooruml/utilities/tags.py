@@ -1,4 +1,5 @@
 import re
+from dexbooruml.config.nlp_config import nlp
 from spacy.language import Language
 
 ACCEPTED_POS = ['NOUN', 'PROPN', 'VERB', 'ADJ']
@@ -7,7 +8,7 @@ BLACKLISTED_SUBSTRINGS = ['res', 'artist', 'character', 'unknown']
 def replace_special_characters(target: str) -> str:
     return re.sub(r'[^a-zA-Z0-9\s]', '', target).lower().strip()
 
-def normalize_tags(nlp: Language, input_tags: list[str]) -> str:
+def normalize_tags(input_tags: list[str]) -> str:
     normalized_tokens = []  
     input_tag_sentence = replace_special_characters(' '.join(input_tags))
     document = nlp(text=input_tag_sentence)

@@ -16,6 +16,4 @@ COPY models /app/models
 COPY dexbooruml /app/dexbooruml
 COPY .env /app/.env
 
-EXPOSE 8000
-
-CMD ["python", "run.py"]
+CMD ["celery", "--app=dexbooruml.config.celery_config.celery_app", "worker", "--loglevel=info", "--pool=solo"]
