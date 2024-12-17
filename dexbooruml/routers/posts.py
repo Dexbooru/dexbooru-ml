@@ -1,5 +1,5 @@
 from fastapi import APIRouter, File, UploadFile
-from dexbooruml.tasks.posts import insert_post_to_vectordb
+from dexbooruml.tasks.posts import insert_post_to_vectordb, delete_post_from_vectordb
 from dexbooruml.config.weaviate_config import vectordb_client, POST_IMAGE_COLLECTION_NAME
 from dexbooruml.utilities.files import url_to_base64, file_to_base64
 from pydantic import BaseModel, UUID4, AfterValidator, HttpUrl, Field, model_validator, field_validator
@@ -10,7 +10,7 @@ import uuid
 MIN_K = 1
 MAX_K = 40
 DEFAULT_K = 10
-
+DEFAULT_DISTANCE_THRESHOLD = 0.50
 
 class PostIndexInput(BaseModel):
     post_id: Annotated[UUID4, Field(
@@ -43,7 +43,7 @@ class PostSimilarityInput(BaseModel):
         description="Image file represented in base 64 form")
     k: int = Field(
         default=DEFAULT_K, description="Number of similar results to retrieve")
-    distance_threshold: float = Field(default=0.0, description="Distance threshold")
+    distance_threshold: float = Field(default=DEFAULT_DISTANCE_THRESHOLD, description="Distance threshold for the similarity search")
 
     @model_validator(mode='before')
     def validate_image_inputs(cls, values: dict) -> dict:
@@ -73,7 +73,7 @@ class PostSimilarityOutput(BaseModel):
 
 
 def register_endpoints(router: APIRouter):
-    @router.post('/index', status_code=201, response_model=PostIndexOutput)
+    @router.post('/index/images', status_code=201, response_model=PostIndexOutput)
     def index_post_images(input: PostIndexInput):
         post_id = str(input.post_id) if not isinstance(
             input.post_id, str) else input.post_id
@@ -84,11 +84,19 @@ def register_endpoints(router: APIRouter):
 
         return {'status': 'success', 'task_id': task_id}
 
+    @router.delete('/index/{post_id}', status_code=200)
+    def delete_post_images(post_id: UUID4):
+        task_response = delete_post_from_vectordb.delay(str(post_id))
+        task_id = task_response.id
+
+        return {'status': 'success', 'task_id': task_id}
+
     @router.post('/index/similarity', status_code=200, response_model=PostSimilarityOutput)
     def find_similar_post_images(input: PostSimilarityInput):
         image_url = input.image_url
         image_file = input.image_file
         k = input.k
+        distance_threshold = input.distance_threshold
 
         image_base64: str = url_to_base64(
             image_url) if image_url else image_file
@@ -99,6 +107,7 @@ def register_endpoints(router: APIRouter):
             near_image=image_base64,
             return_properties=['postId', 'imageUrl'],
             return_metadata=MetadataQuery(distance=True),
+            distance=distance_threshold,
             limit=k
         )
 

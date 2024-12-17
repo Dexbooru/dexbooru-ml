@@ -5,6 +5,7 @@ from dexbooruml.routers.general import build_general_router
 from dexbooruml.routers.posts import build_posts_router
 from dexbooruml.config.weaviate_config import vectordb_client
 from contextlib import asynccontextmanager
+from celery.signals import worker_shutdown
 import os
 
 # define application routers
@@ -12,11 +13,16 @@ tags_router, tags_router_tag = build_tag_router()
 general_router, general_router_tag = build_general_router()
 posts_router, posts_router_tag = build_posts_router()
 
-# define application lifespan
+# define application lifespans for fast api context manager and celery workers
 @asynccontextmanager
 async def app_lifespan(app: FastAPI):
     yield
     vectordb_client.close()
+
+@worker_shutdown.connect
+def shutdown_worker(**kwargs):
+    vectordb_client.close()
+
 
 # define main application instance
 app = FastAPI(title='Dexbooru ML API', lifespan=app_lifespan)

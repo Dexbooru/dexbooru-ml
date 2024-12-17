@@ -10,32 +10,43 @@ load_dotenv()
 POST_IMAGE_COLLECTION_NAME = 'Posts'
 POST_IMAGE_COLLECTION_DESCRIPTION = 'indexed post images from Dexbooru for image similarity search'
 
-vectordb_client = weaviate.WeaviateClient(
-    connection_params=ConnectionParams.from_params(
-        http_host=os.getenv("WEAVIATE_HTTP_HOST"),
-        http_port=os.getenv("WEAVIATE_HTTP_PORT"),
-        http_secure=os.getenv('SERVER_ENV') == 'production',
-        grpc_host=os.getenv("WEAVIATE_GRPC_HOST"),
-        grpc_port=os.getenv("WEAVIATE_GRPC_PORT"),
-        grpc_secure=os.getenv('SERVER_ENV') == 'production',
-    ),
-    additional_config=AdditionalConfig(
-        timeout=Timeout(init=30, query=60, insert=120), 
-    ),
-    skip_init_checks=False
-)
+_vectordb_client = None
 
-vectordb_client.connect()
+def get_vectordb_client():
+    global _vectordb_client
 
-if not vectordb_client.collections.exists(POST_IMAGE_COLLECTION_NAME):
-    vectordb_client.collections.create(
-        name=POST_IMAGE_COLLECTION_NAME, 
-        description=POST_IMAGE_COLLECTION_DESCRIPTION,
-        properties=[
-            Property(name='postId', data_type=DataType.UUID, skip_vectorization=True),
-            Property(name='imageUrl', data_type=DataType.TEXT, skip_vectorization=True),
-            Property(name='blob', data_type=DataType.BLOB),
-        ],
-        vector_index_config=Configure.VectorIndex.hnsw(),
-        vectorizer_config=Configure.Vectorizer.img2vec_neural(image_fields=['blob']),
-    )
+    if _vectordb_client is None:
+        _vectordb_client = weaviate.WeaviateClient(
+            connection_params=ConnectionParams.from_params(
+                http_host=os.getenv("WEAVIATE_HTTP_HOST"),
+                http_port=os.getenv("WEAVIATE_HTTP_PORT"),
+                http_secure=os.getenv('SERVER_ENV') == 'production',
+                grpc_host=os.getenv("WEAVIATE_GRPC_HOST"),
+                grpc_port=os.getenv("WEAVIATE_GRPC_PORT"),
+                grpc_secure=os.getenv('SERVER_ENV') == 'production',
+            ),
+            additional_config=AdditionalConfig(
+                timeout=Timeout(init=30, query=60, insert=120), 
+            ),
+            skip_init_checks=False
+        )
+
+        _vectordb_client.connect()
+
+        if not _vectordb_client.collections.exists(POST_IMAGE_COLLECTION_NAME):
+            vectordb_client.collections.create(
+                name=POST_IMAGE_COLLECTION_NAME, 
+                description=POST_IMAGE_COLLECTION_DESCRIPTION,
+                properties=[
+                    Property(name='postId', data_type=DataType.UUID, skip_vectorization=True),
+                    Property(name='imageUrl', data_type=DataType.TEXT, skip_vectorization=True),
+                    Property(name='blob', data_type=DataType.BLOB),
+                ],
+                vector_index_config=Configure.VectorIndex.hnsw(),
+                vectorizer_config=Configure.Vectorizer.img2vec_neural(image_fields=['blob']),
+            )
+
+    return _vectordb_client
+
+
+vectordb_client = get_vectordb_client()
